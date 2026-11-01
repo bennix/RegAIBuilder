@@ -4,6 +4,7 @@
   "private": true,
   "description": "拖拽搭建正则表达式的可视化 Electron 编辑器",
   "author": "ZHIPING XU <zpxu@fudan.edu.cn>",
+  "homepage": "https://bennix.github.io/RegAIBuilder/",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
