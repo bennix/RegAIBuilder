@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RegAIBuilder · 正则排版台</title>
+  <link rel="icon" href="icon.png" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #14160f;
+      --panel: #1d2116;
+      --ink: #efe7d2;
+      --muted: #b4aa92;
+      --line: #3a4030;
+      --copper: #e0a15a;
+      --moss: #c6d38a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(900px 420px at 10% -10%, rgba(224, 161, 90, 0.18), transparent 60%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Iowan Old Style", Palatino, "Songti SC", serif;
+    }
+    header, main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; padding: 28px 0 8px; }
+    .brand { display: flex; gap: 12px; align-items: center; letter-spacing: 0.14em; text-transform: uppercase; font-family: ui-monospace, monospace; font-size: 12px; color: var(--copper); }
+    .brand img { width: 36px; height: 36px; border-radius: 8px; }
+    a { color: var(--copper); }
+    .hero { padding: 48px 0 20px; }
+    h1 { font-size: clamp(40px, 6vw, 72px); line-height: 0.95; margin: 0 0 16px; font-weight: 560; }
+    .lede { max-width: 640px; font-size: 20px; color: var(--muted); }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .btn, .ghost {
+      text-decoration: none;
+      border-radius: 999px;
+      padding: 10px 16px;
+      border: 1px solid transparent;
+    }
+    .btn { background: var(--copper); color: #24180c; font-weight: 700; }
+    .ghost { border-color: var(--line); color: var(--ink); }
+    .rail {
+      margin-top: 36px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 16px;
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      background: #171b11;
+    }
+    .chip {
+      font-family: ui-monospace, monospace;
+      background: #2a3120;
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 28px 0 64px; }
+    article { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+    h2 { margin: 0 0 8px; font-size: 22px; }
+    p { line-height: 1.5; }
+    code { font-family: ui-monospace, monospace; color: var(--moss); }
+    footer { padding: 0 0 40px; color: var(--muted); }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand"><img src="icon.png" alt="" /> RegAIBuilder</div>
+    <a href="https://github.com/bennix/RegAIBuilder">源码</a>
+  </header>
+  <main>
+    <section class="hero">
+      <h1>把正则<br />排成积木。</h1>
+      <p class="lede">拖拽字符类、量词、分组和断言。右侧说明每个积木的用途。ZenMux 模型用 Markdown 和公式解释表达式，并能把生成的积木一键送到画布。</p>
+      <div class="rail" aria-hidden="true">
+        <span class="chip">^</span>
+        <span class="chip">\d</span>
+        <span class="chip">{4}</span>
+        <span class="chip">-</span>
+        <span class="chip">(?:</span>
+        <span class="chip">0[1-9]</span>
+        <span class="chip">|</span>
+        <span class="chip">1[0-2]</span>
+        <span class="chip">)</span>
+        <span class="chip">$</span>
+      </div>
+      <div class="actions">
+        <a class="btn" href="https://github.com/bennix/RegAIBuilder/releases/latest">下载 0.1.0</a>
+        <a class="ghost" href="https://github.com/bennix/RegAIBuilder/releases/latest/download/RegVisualBuilder-0.1.0-arm64.dmg">macOS DMG</a>
+        <a class="ghost" href="https://github.com/bennix/RegAIBuilder/releases/latest/download/RegVisualBuilder-Setup-0.1.0.exe">Windows</a>
+        <a class="ghost" href="https://github.com/bennix/RegAIBuilder/releases/latest/download/reg-visual-builder_0.1.0_amd64.deb">DEB</a>
+        <a class="ghost" href="https://github.com/bennix/RegAIBuilder/releases/latest/download/reg-visual-builder-0.1.0.x86_64.rpm">RPM</a>
+      </div>
+    </section>
+    <section class="grid">
+      <article>
+        <h2>积木</h2>
+        <p>字面量会自动转义。量词、捕获组、命名组、前瞻后顾和 Unicode 属性都放在左侧，悬停即可看到用途。</p>
+      </article>
+      <article>
+        <h2>多用例</h2>
+        <p>每一行都可以标成应匹配或不该匹配。模型可以生成用例，再一键填进测试表。</p>
+      </article>
+      <article>
+        <h2>模型</h2>
+        <p>设置页修改 Base URL 和模型名。API Key 只加密存在本机，界面只显示密文摘要。默认接入 <code>zenmux.ai</code>。</p>
+      </article>
+    </section>
+    <footer>密钥不会进入仓库。macOS 安装包使用 Developer ID 签名并公证。</footer>
+  </main>
+</body>
+</html>

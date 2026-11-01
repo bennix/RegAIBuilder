@@ -1,0 +1,40 @@
+appId: com.zhipingxu.regvisualbuilder
+productName: RegVisualBuilder
+copyright: Copyright © 2026 ZHIPING XU
+directories:
+  output: release
+files:
+  - dist/**
+  - electron/**
+  - package.json
+  - build/icon.png
+asar: true
+icon: build/icon.png
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - dmg
+  identity: "ZHIPING XU (5N66S29EK2)"
+  icon: build/icon.png
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  notarize: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+dmg:
+  sign: true
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+linux:
+  target:
+    - deb
+    - rpm
+  category: Development
+  maintainer: ZHIPING XU <zpxu@fudan.edu.cn>
+rpm:
+  depends: []
