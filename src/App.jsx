@@ -2,15 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { DEFAULT_BASE, DEFAULT_MODEL, FLAG_DEFS, INVITE_URL, PALETTE, SAMPLES, guideFor, makeNode, nodeFromSpec } from './catalog.js';
 import { chipLabel, compile, explain, parsePattern, testPattern } from './engine.js';
 import { MarkdownView } from './MarkdownView.jsx';
+import { AI_TASKS, buildAiContext } from './ai-context.js';
 
-const AI_TASKS = [
-  { id: 'generate', label: '生成表达式' },
-  { id: 'explain', label: '逐段解释' },
-  { id: 'fix', label: '根据样例修正' },
-  { id: 'tests', label: '生成测试' },
-  { id: 'redos', label: '灾难性回溯' },
-  { id: 'dialect', label: '方言差异' },
-];
 
 function decodeDataUrl(url) {
   const comma = url.indexOf(',');
@@ -38,8 +31,8 @@ function extractJson(text) {
 }
 
 export default function App() {
-  const [nodes, setNodes] = useState(() => parsePattern('^\\d{4}-\\d{2}-\\d{2}$'));
-  const [flags, setFlags] = useState('u');
+  const [nodes, setNodes] = useState(() => parsePattern(SAMPLES.find((sample) => sample.name === '日期').pattern));
+  const [flags, setFlags] = useState('mu');
   const [selected, setSelected] = useState(null);
   const [text, setText] = useState('2026-11-01\n2026-13-40\n1999-02-28');
   const [patternDraft, setPatternDraft] = useState(null);
@@ -47,8 +40,8 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState(null);
-  const [aiTask, setAiTask] = useState('generate');
-  const [aiPrompt, setAiPrompt] = useState('匹配 YYYY-MM-DD，月份和日期必须合法。');
+  const [aiTask, setAiTask] = useState('explain');
+  const [aiPrompt, setAiPrompt] = useState('');
   const [aiOutput, setAiOutput] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -67,6 +60,10 @@ export default function App() {
   const compiled = useMemo(() => compile(nodes), [nodes]);
   const pattern = patternDraft ?? compiled.source;
   const result = useMemo(() => testPattern(pattern, flags, text), [pattern, flags, text]);
+  const multilineWouldMatch = useMemo(() => {
+    if (!pattern || !text.includes('\n') || flags.includes('m') || !result.ok || result.matches.length) return false;
+    return testPattern(pattern, `${flags}m`, text).matches.length > 0;
+  }, [pattern, flags, text, result]);
   const selectedNode = nodes.find((n) => n.id === selected) || null;
 
   useEffect(() => {
@@ -193,22 +190,18 @@ export default function App() {
   }
 
   function runAi() {
+    let context;
+    try {
+      context = buildAiContext({ taskId: aiTask, pattern, flags, cases, text, error: result.error, prompt: aiPrompt });
+    } catch (err) { setAiError(err.message); return; }
     setAiBusy(true);
     setAiError('');
     setAiOutput('');
     setCopied(false);
-    const taskHint = {
-      generate: '用积木拼出 JavaScript 正则。blocks 必须使用给定 kind。',
-      explain: '解释当前积木表达式。blocks 可以照抄现有结构。',
-      fix: '按测试用例修正。应匹配的 should 为 true。',
-      tests: '为当前表达式生成多条应匹配和不应匹配的用例，放进 tests。',
-      redos: '检查灾难性回溯，并用更安全的积木给出替代表达式。',
-      dialect: '说明 JavaScript、Python re、PCRE 的差异。pattern 仍给 JavaScript 写法。',
-    }[aiTask];
     const content = [
       {
         type: 'text',
-        text: `${taskHint}\n当前积木: ${JSON.stringify(nodes.map(({ id, ...rest }) => rest))}\n当前表达式: /${pattern}/${flags}\n已有用例: ${JSON.stringify(cases)}\n用户要求: ${aiPrompt}`,
+        text: context,
       },
     ];
     attachments.forEach((file) => {
@@ -440,7 +433,16 @@ export default function App() {
             <h2>测试文本</h2>
             <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} />
             {result.error && <p className="errors">{result.error}</p>}
-            {!result.error && <p className="hint">{result.matches.length} 处匹配</p>}
+            {result.errorDetail && <details><summary>技术详情</summary><p className="hint" style={{ overflowWrap: 'anywhere' }}>{result.errorDetail}</p></details>}
+            {!result.error && (
+              <p className="hint">{!pattern ? '请先填写表达式。' : !text ? '请输入待测试的文本。' : result.matches.length ? `找到 ${result.matches.length} 处匹配` : '未找到匹配：表达式语法有效，但当前文本中没有符合条件的内容。'}</p>
+            )}
+            {multilineWouldMatch && (
+              <div className="hint">
+                <p>测试文本包含多行。当前未开启 m，^ 和 $ 按整段文本的开头和结尾匹配；已检测到开启 m 后可以找到匹配。如果希望逐行检查，请启用多行模式。</p>
+                <button type="button" onClick={() => toggleFlag('m')}>启用 m：逐行匹配</button>
+              </div>
+            )}
             <Highlight text={text} matches={result.matches} />
             <ul className="matches">
               {result.matches.map((m, i) => (
@@ -465,15 +467,17 @@ export default function App() {
               addAttachmentFiles(files);
             }
           }}>
+        <p className="hint">解释、修正、测试与检查均针对当前表达式，点击执行时读取最新内容。下方可填写补充要求。</p>
+        <code className="hint" style={{ overflowWrap: 'anywhere' }}>当前对象：/{pattern || '空'}/{flags}</code>
         <div className="ai-bar">
           {AI_TASKS.map((task) => (
-            <button key={task.id} type="button" className={aiTask === task.id ? 'on' : ''} onClick={() => setAiTask(task.id)}>
+            <button key={task.id} title={task.hint} type="button" className={aiTask === task.id ? 'on' : ''} onClick={() => setAiTask(task.id)} disabled={aiBusy}>
               {task.label}
             </button>
           ))}
           <button type="button" onClick={() => fileRef.current?.click()}>附件</button>
             <button type="button" className="primary" onClick={runAi} disabled={aiBusy || !settings?.hasKey}>
-              {aiBusy ? '输出中' : '询问模型'}
+              {aiBusy ? '输出中' : `执行：${AI_TASKS.find((task) => task.id === aiTask)?.label}`}
             </button>
           </div>
           <input ref={fileRef} type="file" multiple hidden accept="image/*,.txt,.json,.md" onChange={(e) => { addAttachmentFiles(e.target.files || []); e.target.value = ''; }} />
@@ -493,7 +497,7 @@ export default function App() {
             <a href={INVITE_URL} target="_blank" rel="noreferrer">{INVITE_URL}</a>
           </p>
         )}
-        <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={3} />
+        <textarea aria-label="AI 补充要求" placeholder={AI_TASKS.find((task) => task.id === aiTask)?.placeholder} value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} rows={3} />
         {aiError && <p className="errors">{aiError}</p>}
         <div className="ai-card">
             {canvasDraft && (
@@ -506,6 +510,12 @@ export default function App() {
               <button type="button" onClick={copyOutput} disabled={!aiOutput}>{copied ? '已复制' : '复制输出'}</button>
               <button type="button" onClick={applyTests} disabled={!aiData?.tests}>填入用例</button>
             </div>
+            {Array.isArray(aiData?.warnings) && aiData.warnings.some((item) => typeof item === 'string' && item.trim()) && (
+              <div className="hint">
+                <strong>注意事项</strong>
+                <ul>{aiData.warnings.filter((item) => typeof item === 'string' && item.trim()).map((item, index) => <li key={index}>{item}</li>)}</ul>
+              </div>
+            )}
             {aiOutput && <MarkdownView text={aiOutput} streaming={aiBusy} />}
           </div>
         </section>
@@ -583,6 +593,26 @@ function Settings({ initial, onClose, onSaved }) {
   const [models, setModels] = useState(initial?.models || [DEFAULT_MODEL]);
   const [activeModel, setActiveModel] = useState(initial?.activeModel || DEFAULT_MODEL);
   const [draftModel, setDraftModel] = useState('');
+  const [proxyMode, setProxyMode] = useState(initial?.proxyMode || 'system');
+  const [proxyUrl, setProxyUrl] = useState(initial?.proxyUrl || '');
+  const [networkStatus, setNetworkStatus] = useState('');
+  const [networkBusy, setNetworkBusy] = useState(false);
+
+  async function checkNetwork(detect = false) {
+    setNetworkBusy(true);
+    setNetworkStatus('');
+    try {
+      if (detect) {
+        const result = await window.desk.detectProxy(baseUrl);
+        setNetworkStatus(`系统检测结果：${result.route}${result.proxyUrl ? '（已填入地址，选择手动代理可使用）' : '（系统未为该地址配置代理）'}`);
+        if (result.proxyUrl) setProxyUrl(result.proxyUrl);
+      } else {
+        const result = await window.desk.testNetwork({ baseUrl, proxyMode, proxyUrl });
+        setNetworkStatus(result.message);
+      }
+    } catch (err) { setNetworkStatus(err.message || '检测失败'); }
+    finally { setNetworkBusy(false); }
+  }
   const [error, setError] = useState('');
 
   async function save(extra = {}) {
@@ -593,6 +623,8 @@ function Settings({ initial, onClose, onSaved }) {
         baseUrl,
         models,
         activeModel,
+        proxyMode,
+        proxyUrl,
         ...extra,
       });
       onSaved(next);
@@ -611,6 +643,7 @@ function Settings({ initial, onClose, onSaved }) {
         }}
       >
         <h2>ZenMux 设置</h2>
+        <p className="hint">代理可跟随系统自动解析，也可手动指定。连接测试使用当前填写值，保存后应用到 AI 对话。</p>
         <p className="hint">密钥只在本机用户数据目录加密保存。界面不回显明文，只显示密文摘要。</p>
         {!initial?.hasKey && (
           <p className="invite">
@@ -633,6 +666,23 @@ function Settings({ initial, onClose, onSaved }) {
           Base URL
           <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} spellCheck={false} />
         </label>
+        <label>
+          代理模式
+          <select value={proxyMode} onChange={(e) => { setProxyMode(e.target.value); setNetworkStatus(''); }}>
+            <option value="system">自动：跟随系统代理 / PAC</option>
+            <option value="manual">手动填写代理</option>
+            <option value="direct">直连</option>
+          </select>
+        </label>
+        <label>
+          代理地址（手动模式生效）
+          <input value={proxyUrl} onChange={(e) => { setProxyUrl(e.target.value); setNetworkStatus(''); }} placeholder="http://127.0.0.1:7897 或 socks5://127.0.0.1:7897" spellCheck={false} />
+        </label>
+        <div className="row">
+          <button type="button" disabled={networkBusy} onClick={() => checkNetwork(true)}>自动检测代理</button>
+          <button type="button" disabled={networkBusy} onClick={() => checkNetwork(false)}>{networkBusy ? '检测中…' : '测试连接'}</button>
+        </div>
+        {networkStatus && <p className="hint" role="status">{networkStatus}</p>}
         <label>
           当前模型
           <select value={activeModel} onChange={(e) => setActiveModel(e.target.value)}>

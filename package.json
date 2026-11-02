@@ -12,7 +12,8 @@
     "build": "vite build",
     "start": "vite build && electron .",
     "pack": "vite build && electron-builder --mac dmg --win nsis --linux deb rpm",
-    "test:engine": "node --test src/engine.test.mjs"
+    "test:engine": "node --test src/engine.test.mjs",
+    "test": "node --test src/engine.test.mjs src/ai-context.test.mjs electron/network.test.cjs"
   },
   "dependencies": {
     "katex": "^0.19.1",

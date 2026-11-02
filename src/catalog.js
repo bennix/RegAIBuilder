@@ -60,11 +60,11 @@ export const PALETTE = [
 ];
 
 export const SAMPLES = [
-  { name: '邮箱', pattern: '^[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+$', flags: 'i', sample: 'ada@example.com\nbad@\nAda.Lovelace@lab.co.uk' },
-  { name: '中国手机', pattern: '^1[3-9]\\d{9}$', flags: '', sample: '13800138000\n12345678901\n19900001111' },
-  { name: 'IPv4', pattern: '^(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)$', flags: '', sample: '192.168.0.1\n256.1.1.1\n10.0.0.255' },
-  { name: '日期', pattern: '^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])$', flags: '', sample: '2026-11-01\n2026-13-01\n1999-02-29' },
-  { name: '十六进制颜色', pattern: '^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$', flags: '', sample: '#fff\n#e8a15a\n#11223344\n#gg0000' },
+  { name: '邮箱', pattern: '^[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+$', flags: 'im', sample: 'ada@example.com\nbad@\nAda.Lovelace@lab.co.uk' },
+  { name: '中国手机', pattern: '^1[3-9]\\d{9}$', flags: 'm', sample: '13800138000\n12345678901\n19900001111' },
+  { name: 'IPv4', pattern: '^(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)$', flags: 'm', sample: '192.168.0.1\n256.1.1.1\n10.0.0.255' },
+  { name: '日期', pattern: '^\\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])$', flags: 'm', sample: '2026-11-01\n2026-13-01\n1999-02-29' },
+  { name: '十六进制颜色', pattern: '^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$', flags: 'm', sample: '#fff\n#e8a15a\n#11223344\n#gg0000' },
 ];
 
 export const FLAG_DEFS = [

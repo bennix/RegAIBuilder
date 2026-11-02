@@ -1,4 +1,6 @@
 const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const { fetchWithSystemProxy, networkError } = require('./network.cjs');
+const { normalizeProxy, getNetworkSession, apiBase } = require('./proxy.cjs');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -88,6 +90,7 @@ function publicSettings(raw) {
     models: Array.isArray(raw.models) && raw.models.length ? raw.models : [DEFAULT_MODEL],
     activeModel: raw.activeModel || DEFAULT_MODEL,
     baseUrl: raw.baseUrl || DEFAULT_BASE,
+    ...normalizeProxy(raw),
     inviteUrl: 'https://zenmux.ai/invite/GBQMC5',
   };
 }
@@ -117,6 +120,8 @@ ipcMain.handle('settings:get', () => publicSettings(loadRaw()));
 
 ipcMain.handle('settings:save', (_e, patch) => {
   const raw = loadRaw();
+  Object.assign(raw, normalizeProxy({ ...raw, ...patch }));
+  if (patch.baseUrl) apiBase(patch.baseUrl.trim());
   if (typeof patch.baseUrl === 'string' && patch.baseUrl.trim()) raw.baseUrl = patch.baseUrl.trim();
   if (Array.isArray(patch.models)) {
     const models = [...new Set(patch.models.map((m) => String(m).trim()).filter(Boolean))];
@@ -136,7 +141,33 @@ ipcMain.handle('settings:save', (_e, patch) => {
   return publicSettings(raw);
 });
 
+ipcMain.handle('network:detect', async (_event, baseUrl) => {
+  const ses = await getNetworkSession({ proxyMode: 'system' });
+  const route = await ses.resolveProxy(apiBase(baseUrl || DEFAULT_BASE));
+  const match = route.match(/(?:^|;\s*)(PROXY|HTTPS|SOCKS5|SOCKS)\s+([^;]+)/);
+  const schemes = { PROXY: 'http', HTTPS: 'https', SOCKS5: 'socks5', SOCKS: 'socks4' };
+  return { route, proxyUrl: match ? `${schemes[match[1]]}://${match[2].trim()}` : '' };
+});
+
+ipcMain.handle('network:test', async (_event, patch) => {
+  let request;
+  let route = '';
+  try {
+    const base = apiBase(patch.baseUrl || DEFAULT_BASE);
+    const ses = await getNetworkSession(patch);
+    route = await ses.resolveProxy(base);
+    request = fetchWithSystemProxy(ses, `${base}/models`, {}, 15000);
+    const res = await request.response;
+    await res.body?.cancel();
+    const ok = res.ok || res.status === 401 || res.status === 403;
+    return { ok, message: `${route} · HTTP ${res.status}：${res.ok ? '网络连通（尚未验证 AI 对话）' : res.status === 401 || res.status === 403 ? '已连接服务，需在对话中验证密钥 / 权限' : '服务返回异常状态，请检查 Base URL'}` };
+  } catch (error) {
+    return { ok: false, message: `${route ? `${route} · ` : ''}${request?.signal.aborted ? '连接测试超时（15 秒）' : networkError(error)}` };
+  } finally { request?.dispose(); }
+});
+
 ipcMain.on('ai:stream', async (event, { id, payload }) => {
+  let request;
   const send = (message) => {
     if (!event.sender.isDestroyed()) event.sender.send('ai:event', { id, ...message });
   };
@@ -147,9 +178,10 @@ ipcMain.on('ai:stream', async (event, { id, payload }) => {
       send({ type: 'error', error: '还没有 API Key。请到设置页保存，或使用邀请链接领取。' });
       return;
     }
-    const base = (raw.baseUrl || DEFAULT_BASE).replace(/\/$/, '');
+    const base = apiBase(raw.baseUrl || DEFAULT_BASE);
+    const transport = await getNetworkSession(raw);
     const model = payload.model || raw.activeModel || DEFAULT_MODEL;
-    const res = await fetch(`${base}/chat/completions`, {
+    request = fetchWithSystemProxy(transport, `${base}/chat/completions`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -162,6 +194,7 @@ ipcMain.on('ai:stream', async (event, { id, payload }) => {
         messages: payload.messages,
       }),
     });
+    const res = await request.response;
     if (!res.ok || !res.body) {
       const text = await res.text();
       send({ type: 'error', error: `ZenMux ${res.status}: ${text.slice(0, 500)}` });
@@ -192,7 +225,9 @@ ipcMain.on('ai:stream', async (event, { id, payload }) => {
     }
     send({ type: 'done' });
   } catch (err) {
-    send({ type: 'error', error: err.message || '流式请求失败' });
+    send({ type: 'error', error: networkError(err, request?.signal.aborted) });
+  } finally {
+    request?.dispose();
   }
 });
 

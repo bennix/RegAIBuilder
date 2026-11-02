@@ -347,6 +347,41 @@ export function parsePattern(source) {
   return nodes;
 }
 
+export function explainPatternError(source, message) {
+  if (/Invalid named capture referenced|Invalid named backreference/i.test(message)) {
+    const declared = new Set();
+    const referenced = new Set();
+    let inClass = false;
+    for (let i = 0; i < source.length; i += 1) {
+      if (source[i] === '\\') {
+        const ref = !inClass && source.slice(i).match(/^\\k<([^>]+)>/);
+        if (ref) { referenced.add(ref[1]); i += ref[0].length - 1; }
+        else i += 1;
+      } else if (source[i] === '[') inClass = true;
+      else if (source[i] === ']') inClass = false;
+      else if (!inClass) {
+        const group = source.slice(i).match(/^\(\?<([^=!][^>]*)>/);
+        if (group) declared.add(group[1]);
+      }
+    }
+    const missing = [...referenced].filter((name) => !declared.has(name));
+    const name = missing[0] || 'name';
+    return `引用的命名捕获组不存在${missing.length ? `：${missing.join('、')}` : ''}。\\k<${name}> 表示再次匹配名为“${name}”的分组先前捕获的同一段文本；需要先用 (?<${name}>...) 定义该分组，名称必须一致。若只是想匹配普通文本，请删除这个反向引用积木，换成文本或字符类积木；name 是示例名称，不会自动创建分组。`;
+  }
+  const hints = [
+    [/Unterminated character class/i, '字符类缺少右方括号 ]。请检查 [ 与 ] 是否配对；匹配字面量方括号时可使用文本积木。'],
+    [/Unterminated group/i, '分组缺少右括号 )。请为每个分组开始积木添加对应的分组结束积木。'],
+    [/Unmatched '\)'/i, '多了一个右括号 )。请删除多余的分组结束积木，或补上对应的分组开始积木。'],
+    [/Nothing to repeat/i, '量词前没有可重复的内容。请把 *、+、? 或次数量词放在字符、字符类或完整分组之后。'],
+    [/Range out of order|numbers out of order/i, '范围的起点大于终点。请检查字符范围（如 [a-z]）或重复次数（如下限 2、上限 4）的顺序。'],
+    [/Duplicate capture group name/i, '命名捕获组名称重复。请为不同分组使用不同名称，并同步修改对应的反向引用。'],
+    [/Invalid capture group name/i, '命名捕获组名称无效。建议使用字母或下划线开头的名称，例如 word、year。'],
+    [/Invalid escape/i, '转义写法无效。请检查反斜杠后的字符；如果要匹配普通文本，可改用文本积木自动转义。'],
+    [/Invalid flags/i, '正则标志无效。请检查所选标志是否受当前运行环境支持。'],
+  ];
+  return hints.find(([pattern]) => pattern.test(message))?.[1] || '正则表达式语法有误，暂时无法执行匹配。请检查括号、字符类、量词及原始片段的写法，可展开技术详情查看原始错误。';
+}
+
 export function testPattern(source, flags, text) {
   if (!source) return { ok: true, matches: [], error: '' };
   let re;
@@ -355,7 +390,7 @@ export function testPattern(source, flags, text) {
   try {
     re = new RegExp(source, unique);
   } catch (err) {
-    return { ok: false, matches: [], error: err.message };
+    return { ok: false, matches: [], error: explainPatternError(source, err.message), errorDetail: err.message };
   }
   const matches = [];
   let guard = 0;
